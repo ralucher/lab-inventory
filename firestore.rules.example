@@ -1,0 +1,19 @@
+rules_version = '2';
+// Only the email addresses listed in allowed() can read or change the inventory.
+// To add a lab member: add their email (lowercase) to the list and click Publish
+// in Firebase console > Firestore Database > Rules.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function allowed() {
+      return request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email.lower() in [
+          'first.person@example.com',
+          'second.person@example.com'
+        ];
+    }
+    match /items/{id} { allow read, write: if allowed(); }
+    match /requests/{id} { allow read, write: if allowed(); }
+    match /{document=**} { allow read, write: if false; }
+  }
+}

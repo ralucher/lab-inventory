@@ -1,0 +1,598 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Lucena Lab Inventory</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Instrument+Sans:wght@500;600;700&display=swap">
+<style>
+/* Layout: sticky toolbar header, type rail of chips, one dense table; detail opens as a side sheet. */
+:root{
+  --bg:#f6f7f6; --surface:#ffffff; --sunk:#eef1ef; --line:#d9dfdb; --fg:#17211c; --muted:#5c6b63;
+  --accent:#0f6b5a; --accent-fg:#ffffff; --accent-soft:#dcefe9;
+  --warn:#a15c00; --warn-soft:#fbecd6; --crit:#b4232c; --crit-soft:#f9dfe0; --ok:#2d7a3e; --ok-soft:#e0f0e3;
+  --t-antibody:#7a4bb8; --t-chemical:#0f6b5a; --t-enzyme:#b8532a; --t-oligo:#2b62b5; --t-supply:#6b6f2a; --t-equipment:#5a5f66; --t-plasmid:#a8327a; --t-strain:#8a6a12;
+  --font-display:"Instrument Sans", "IBM Plex Sans", system-ui, sans-serif;
+  --font-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --radius:8px; --shadow:0 12px 40px rgba(10,30,20,.18);
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1412; --surface:#161d1a; --sunk:#1c2521; --line:#2a3530; --fg:#e4ebe7; --muted:#93a39a;
+  --accent:#4cc3a6; --accent-fg:#06221b; --accent-soft:#163a31;
+  --warn:#f0b14f; --warn-soft:#3a2b12; --crit:#ff7b82; --crit-soft:#3d1a1d; --ok:#7bd08c; --ok-soft:#173222;
+  --t-antibody:#b896ec; --t-chemical:#4cc3a6; --t-enzyme:#f09a72; --t-oligo:#7fa9f0; --t-supply:#c3c77a; --t-equipment:#a7adb5; --t-plasmid:#ef86c4; --t-strain:#e0c060;
+  --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1412; --surface:#161d1a; --sunk:#1c2521; --line:#2a3530; --fg:#e4ebe7; --muted:#93a39a;
+  --accent:#4cc3a6; --accent-fg:#06221b; --accent-soft:#163a31;
+  --warn:#f0b14f; --warn-soft:#3a2b12; --crit:#ff7b82; --crit-soft:#3d1a1d; --ok:#7bd08c; --ok-soft:#173222;
+  --t-antibody:#b896ec; --t-chemical:#4cc3a6; --t-enzyme:#f09a72; --t-oligo:#7fa9f0; --t-supply:#c3c77a; --t-equipment:#a7adb5; --t-plasmid:#ef86c4; --t-strain:#e0c060;
+  --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;-webkit-text-size-adjust:100%}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--font-body);font-size:14px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--surface)}
+.wrap{padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));max-width:1400px;margin:0 auto}
+header.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--surface);border-bottom:1px solid var(--line)}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding-block:12px}
+.brand{display:flex;align-items:baseline;gap:10px;margin-right:auto}
+.brand h1{font-family:var(--font-display);font-size:20px;font-weight:700;letter-spacing:-.01em;margin:0}
+.brand small{color:var(--muted);font-size:12px}
+.views{display:flex;gap:2px;background:var(--sunk);padding:3px;border-radius:999px}
+.views button{border:0;background:transparent;padding:6px 14px;border-radius:999px;cursor:pointer;color:var(--muted);font-weight:500}
+.views button[aria-pressed="true"]{background:var(--surface);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.views .count{font-family:var(--font-mono);font-size:11px;margin-left:4px;color:var(--accent)}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);padding:7px 12px;border-radius:var(--radius);cursor:pointer;font-weight:500;white-space:nowrap}
+.btn:hover{border-color:var(--muted)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-fg)}
+.btn.danger{color:var(--crit);border-color:var(--crit)}
+.btn.danger.armed{background:var(--crit);color:#fff}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.sm{padding:4px 9px;font-size:13px}
+.search{flex:1 1 260px;max-width:420px;position:relative}
+.search input{width:100%;padding:8px 12px 8px 32px;border:1px solid var(--line);border-radius:var(--radius);background:var(--bg)}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--muted)}
+.rail{display:flex;gap:6px;flex-wrap:wrap;padding-block:12px 4px}
+.chip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:5px 11px;cursor:pointer;font-size:13px}
+.chip .dot{width:8px;height:8px;border-radius:50%;background:var(--c,var(--muted))}
+.chip .n{font-family:var(--font-mono);font-size:11px;color:var(--muted)}
+.chip[aria-pressed="true"]{border-color:var(--fg);background:var(--fg);color:var(--bg)}
+.chip[aria-pressed="true"] .n{color:inherit;opacity:.7}
+.filters{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding-block:8px 12px;color:var(--muted);font-size:13px}
+.filters select{padding:5px 8px;border:1px solid var(--line);border-radius:6px;background:var(--surface)}
+.toggle{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:6px;padding:4px 9px;background:var(--surface);cursor:pointer}
+.toggle[aria-pressed="true"]{border-color:var(--warn);background:var(--warn-soft);color:var(--warn)}
+.status-line{margin-left:auto;font-size:12px}
+.tablebox{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface);margin-bottom:32px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;text-align:left;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);font-weight:600;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--sunk);white-space:nowrap;cursor:pointer;user-select:none}
+th.num,td.num{text-align:right}
+td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:middle}
+tbody tr{cursor:pointer}
+tbody tr:hover{background:var(--sunk)}
+tbody tr:last-child td{border-bottom:0}
+td.name{font-weight:500;max-width:420px}
+td.name .sub{display:block;font-weight:400;color:var(--muted);font-size:12px}
+.mono{font-family:var(--font-mono);font-size:12.5px}
+.gate{position:fixed;inset:0;z-index:40;background:var(--bg);display:grid;place-items:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.gate-card{width:min(400px,100%);background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:28px;display:flex;flex-direction:column;gap:10px}
+.gate-card h2{font-family:var(--font-display);margin:0 0 4px;font-size:22px}
+.gate-card p{margin:0;color:var(--muted)}
+.gate-card input{padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
+.gate-card .btn{justify-content:center}
+.gate-or{text-align:center;color:var(--muted);font-size:12px}
+.clip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.notes{min-width:220px;max-width:420px;font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
+.seq{font-family:var(--font-mono);font-size:12px;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+.tag{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);white-space:nowrap}
+.tag .dot{width:7px;height:7px;border-radius:50%;background:var(--c)}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:2px 7px;border-radius:999px;white-space:nowrap}
+.pill.low{background:var(--warn-soft);color:var(--warn)}
+.pill.out{background:var(--crit-soft);color:var(--crit)}
+.pill.exp{background:var(--crit-soft);color:var(--crit)}
+.pill.soon{background:var(--warn-soft);color:var(--warn)}
+.stock{display:inline-flex;align-items:center;gap:4px}
+.stock button{width:24px;height:24px;border:1px solid var(--line);background:var(--surface);border-radius:6px;cursor:pointer;line-height:1;padding:0}
+.stock button:hover{border-color:var(--accent);color:var(--accent)}
+.stock .v{min-width:28px;text-align:center;font-family:var(--font-mono)}
+.empty{padding:48px 16px;text-align:center;color:var(--muted)}
+.empty strong{display:block;color:var(--fg);font-size:16px;margin-bottom:4px;font-family:var(--font-display)}
+.banner{margin-block:10px;padding:10px 12px;border-radius:var(--radius);background:var(--warn-soft);color:var(--warn);font-size:13px}
+/* sheet */
+.scrim{position:fixed;inset:0;background:rgba(5,15,10,.35);z-index:20}
+.sheet{position:fixed;top:0;right:0;bottom:0;width:min(560px,100%);background:var(--surface);z-index:21;box-shadow:var(--shadow);display:flex;flex-direction:column;
+  padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);padding-right:env(safe-area-inset-right,0px)}
+.sheet-head{display:flex;align-items:flex-start;gap:12px;padding:16px 20px;border-bottom:1px solid var(--line)}
+.sheet-head h2{font-family:var(--font-display);font-size:18px;margin:0;line-height:1.25;text-wrap:balance}
+.sheet-head .meta{font-size:12px;color:var(--muted);margin-top:4px}
+.sheet-head .x{margin-left:auto;border:0;background:transparent;font-size:22px;cursor:pointer;color:var(--muted);line-height:1}
+.sheet-body{overflow:auto;padding:16px 20px;flex:1;display:flex;flex-direction:column;gap:18px}
+.sheet-foot{display:flex;flex-wrap:wrap;gap:8px;padding:12px 20px;border-top:1px solid var(--line)}
+.sheet-foot .spacer{flex:1}
+fieldset{border:0;margin:0;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:10px 12px}
+legend{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:8px;padding:0}
+.f{display:flex;flex-direction:column;gap:4px;min-width:0}
+.f.wide{grid-column:1/-1}
+.f label{font-size:12px;color:var(--muted)}
+.f input,.f select,.f textarea{padding:7px 9px;border:1px solid var(--line);border-radius:6px;background:var(--bg);width:100%}
+.f textarea{min-height:64px;resize:vertical}
+.f textarea.mono{font-family:var(--font-mono)}
+.seqinfo{font-family:var(--font-mono);font-size:12px;color:var(--muted)}
+/* orders */
+.board{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;padding-block:12px 32px}
+.col{background:var(--sunk);border-radius:var(--radius);padding:10px;min-width:0;display:flex;flex-direction:column;gap:8px}
+.col h3{font-size:12px;letter-spacing:.06em;text-transform:uppercase;margin:2px 4px 4px;color:var(--muted);display:flex;justify-content:space-between}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:10px 12px;display:flex;flex-direction:column;gap:6px}
+.card .t{font-weight:500}
+.card .m{font-size:12px;color:var(--muted)}
+.card .acts{display:flex;gap:6px;flex-wrap:wrap}
+.card.urgent{border-left:3px solid var(--crit)}
+.col .none{font-size:12px;color:var(--muted);padding:8px 4px}
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:9px 16px;border-radius:999px;z-index:30;font-size:13px}
+@media (max-width:900px){.board{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:640px){
+  .board{grid-template-columns:1fr}
+  fieldset{grid-template-columns:1fr}
+  .hide-sm{display:none}
+  .brand small{display:none}
+  .search{max-width:none;order:5;flex-basis:100%}
+}
+@media (prefers-reduced-motion:no-preference){.sheet{animation:slide .18s ease-out}@keyframes slide{from{transform:translateX(24px);opacity:.6}}}
+</style>
+
+<header class="top">
+  <div class="wrap bar">
+    <div class="brand"><h1>Lucena Lab Inventory</h1><small id="who"></small></div>
+    <div class="views" role="group" aria-label="View">
+      <button id="v-inv" aria-pressed="true">Inventory</button>
+      <button id="v-ord" aria-pressed="false">Orders<span class="count" id="ord-count"></span></button>
+    </div>
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Search name, catalog #, sequence, location…" autocomplete="off">
+    </div>
+    <button class="btn" id="export">Export CSV</button>
+    <button class="btn" id="backup-btn" title="Download or restore a full backup">Backup</button>
+    <button class="btn" id="signout" hidden>Sign out</button>
+    <button class="btn primary" id="add">+ Add item</button>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="banner" class="banner" hidden></div>
+  <section id="inv">
+    <div class="rail" id="rail"></div>
+    <div class="filters">
+      <label for="loc">Location</label>
+      <select id="loc"><option value="">All locations</option></select>
+      <button class="toggle" id="f-low" aria-pressed="false">Low stock</button>
+      <button class="toggle" id="f-exp" aria-pressed="false">Expiring ≤ 60 days</button>
+      <span class="status-line" id="status">Connecting to the lab database…</span>
+    </div>
+    <div class="tablebox"><table><thead id="thead"></thead><tbody id="tbody"></tbody></table>
+      <div class="empty" id="empty" hidden></div>
+    </div>
+  </section>
+  <section id="ord" hidden>
+    <div class="filters" style="padding-top:14px">
+      <span>Reorder requests move left to right. Marking an order received adds it to stock.</span>
+      <span class="status-line"><button class="btn sm primary" id="new-req">+ New request</button></span>
+    </div>
+    <div class="board" id="board"></div>
+  </section>
+</main>
+<div id="gate" class="gate" hidden>
+  <form id="gate-form" class="gate-card">
+    <h2>Lucena Lab Inventory</h2>
+    <p>Sign in with the email the lab manager added to the lab's list.</p>
+    <label for="gate-email">Your email</label>
+    <input id="gate-email" type="email" autocomplete="email" placeholder="name@us.es" required>
+    <button class="btn primary" type="submit">Email me a sign-in link</button>
+    <div class="gate-or">or</div>
+    <button class="btn" type="button" id="gate-google">Sign in with Google</button>
+    <p id="gate-msg" class="seqinfo" role="status"></p>
+  </form>
+</div>
+<div id="sheet-root"></div>
+<div id="toast-root"></div>
+
+<script>
+(() => {
+const TYPES = {
+  antibody:{label:"Antibodies",one:"Antibody",extra:[["antigen","Antigen / conjugate"],["raisedIn","Raised in"],["primarySecondary","Primary / secondary"],["clonality","Clonality"],["clone","Clone"],["dilution","Working dilution"],["applications","Applications",1]]},
+  chemical:{label:"Chemicals",one:"Chemical",extra:[["cas","CAS number"],["formula","Formula"],["mw","Molecular weight"],["hazard","Hazards"],["prep","Stock preparation",1]]},
+  enzyme:{label:"Enzymes & kits",one:"Enzyme / kit",extra:[["activity","Activity"],["buffer","Buffer"],["incubationTemp","Incubation temp"],["storageTemp","Storage temp"]]},
+  oligo:{label:"Oligos",one:"Oligo",extra:[["oligoNo","Oligo #"],["owner","Designed by"],["sequence","Sequence 5′→3′","seq"],["bindsTo","Binds to / template"],["application","Application"],["tm","Tm (°C)"]]},
+  plasmid:{label:"Plasmids",one:"Plasmid",extra:[["plasmidNo","Plasmid #"],["backbone","Backbone"],["insert","Insert"],["resistance","Bacterial resistance"],["marker","Yeast marker"],["box","Freezer box / position"],["owner","Made by"]]},
+  strain:{label:"Strains",one:"Strain",extra:[["strainNo","Number"],["owner","Your name"],["genotype","Chromosomal genotype","seqtext"],["background","Strain background"],["mating","Mating type"],["bar","BAR status (BAR+ / BAR−)"],["origin","Lab of origin"],["prevName","Previous / other-lab name"],["kelloggName","Kellogg lab strain name"],["notebook","Notebook reference"],["entered","Date entered"],["repPlasmid","Replicating plasmid"],["intPlasmid","Integrated plasmid"],["plasmidMarker","Plasmid marker"],["box","Freezer box / position"],["reference","Reference for construction of strain",1]]},
+  supply:{label:"Supplies",one:"Supply",extra:[]},
+  equipment:{label:"Equipment",one:"Equipment",extra:[["serial","Serial #"],["contact","Service contact"],["maintenance","Maintenance notes",1]]},
+};
+const ORDER = ["antibody","chemical","enzyme","oligo","plasmid","strain","supply","equipment"];
+const STATUSES = [["requested","Requested"],["approved","Approved"],["ordered","Ordered"],["received","Received"]];
+const $ = s => document.querySelector(s);
+const eur = new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"});
+const S = {items:new Map(), reqs:new Map(), type:"", loc:"", low:false, exp:false, q:"", sort:null, view:"inv", loaded:false, readonly:false, me:null};
+let db=null;
+
+function h(tag, attrs, ...kids){
+  const el=document.createElement(tag);
+  for(const [k,v] of Object.entries(attrs||{})){
+    if(v==null||v===false) continue;
+    if(k==="class") el.className=v; else if(k.startsWith("on")) el.addEventListener(k.slice(2),v);
+    else if(k==="style") el.style.cssText=v; else el.setAttribute(k, v===true?"":v);
+  }
+  for(const c of kids.flat()){ if(c==null||c===false) continue; el.append(c instanceof Node?c:document.createTextNode(String(c))); }
+  return el;
+}
+function toast(msg){const t=h("div",{class:"toast",role:"status"},msg);$("#toast-root").replaceChildren(t);setTimeout(()=>t.remove(),2600)}
+function today(){return new Date().toISOString().slice(0,10)}
+function daysTo(d){if(!d)return null;const t=Date.parse(d);return isNaN(t)?null:Math.round((t-Date.now())/864e5)}
+function cleanSeq(s){return (s||"").replace(/[^ACGTUNacgtun]/g,"").toUpperCase()}
+function isLow(it){return typeof it.stock==="number" && ((typeof it.minStock==="number" && it.stock<=it.minStock) || it.stock<=0)}
+function expState(it){const d=daysTo(it.expiry);if(d==null)return null;if(d<0)return "exp";if(d<=60)return "soon";return null}
+function x(it,k){return (it.extra&&it.extra[k])||""}
+
+/* ---------- names ---------- */
+function resolveNames(){}
+const who = id => !id ? "" : id===S.me ? "you" : (String(id).includes("@") ? String(id).split("@")[0] : "a lab member");
+
+/* ---------- inventory render ---------- */
+function filtered(){
+  const q=S.q.trim().toLowerCase(), qs=cleanSeq(S.q);
+  let arr=[...S.items.values()].filter(it=>{
+    if(S.type && it.type!==S.type) return false;
+    if(S.loc && (it.location||"")!==S.loc) return false;
+    if(S.low && !isLow(it)) return false;
+    if(S.exp && !expState(it)) return false;
+    if(!q) return true;
+    const hay=[it.name,it.brand,it.supplier,it.catalog,it.location,it.notes,it.lot,...Object.values(it.extra||{})].join(" ").toLowerCase();
+    if(hay.includes(q)) return true;
+    return qs.length>=6 && cleanSeq(x(it,"sequence")).includes(qs);
+  });
+  const s=S.sort;
+  if(s){arr.sort((a,b)=>{const va=s.get(a),vb=s.get(b);if(va===vb)return 0;if(va===""||va==null)return 1;if(vb===""||vb==null)return -1;return (va<vb?-1:1)*s.dir})}
+  else arr.sort((a,b)=> a.type===b.type && a.type==="oligo" ? (+x(a,"oligoNo")||1e9)-(+x(b,"oligoNo")||1e9) : ORDER.indexOf(a.type)-ORDER.indexOf(b.type) || (a.name||"").localeCompare(b.name||""));
+  return arr;
+}
+function columns(){
+  const t=S.type;
+  const name={k:"name",l:"Item",get:i=>(i.name||"").toLowerCase(),cell:i=>h("td",{class:"name"},i.name||"(unnamed)",(i.brand||i.supplier)&&h("span",{class:"sub"},[i.brand,i.supplier&&i.supplier!==i.brand?"via "+i.supplier:""].filter(Boolean).join(" · ")))};
+  const typeC={k:"type",l:"Type",cls:"hide-sm",get:i=>i.type,cell:i=>h("td",{class:"hide-sm"},h("span",{class:"tag",style:`--c:var(--t-${i.type})`},h("span",{class:"dot"}),TYPES[i.type]?.one||i.type))};
+  const cat={k:"catalog",l:"Catalog #",cls:"hide-sm",get:i=>i.catalog||"",cell:i=>h("td",{class:"mono hide-sm"},i.catalog||"")};
+  const loc={k:"location",l:"Location",get:i=>(i.location||"").toLowerCase(),cell:i=>h("td",{},i.location||h("span",{style:"color:var(--muted)"},"—"))};
+  const size={k:"size",l:"Size",cls:"hide-sm",get:i=>i.size||"",cell:i=>h("td",{class:"hide-sm"},i.size||"")};
+  const stock={k:"stock",l:"In stock",get:i=>typeof i.stock==="number"?i.stock:"",cell:stockCell};
+  const price={k:"price",l:"Price",cls:"num hide-sm",get:i=>typeof i.price==="number"?i.price:"",cell:i=>h("td",{class:"num hide-sm"},typeof i.price==="number"&&i.price>0?eur.format(i.price):"")};
+  const status={k:"st",l:"",get:i=>0,cell:i=>{const td=h("td",{});if(isLow(i))td.append(h("span",{class:"pill "+(i.stock<=0?"out":"low")},i.stock<=0?"Out":"Low"));const e=expState(i);if(e)td.append(" ",h("span",{class:"pill "+e},e==="exp"?"Expired":"Expires "+i.expiry));return td}};
+  if(t==="oligo") return [
+    {k:"no",l:"#",cls:"num",get:i=>+x(i,"oligoNo")||1e9,cell:i=>h("td",{class:"num mono"},x(i,"oligoNo"))},
+    {...name,cell:i=>h("td",{class:"name"},i.name)},
+    {k:"seq",l:"Sequence",get:i=>cleanSeq(x(i,"sequence")).length,cell:i=>{const s=cleanSeq(x(i,"sequence"));return h("td",{},h("div",{class:"seq",title:s},s),s&&h("span",{class:"sub mono",style:"font-size:11px;color:var(--muted)"},s.length+" nt"))}},
+    {k:"binds",l:"Binds to",cls:"hide-sm",get:i=>x(i,"bindsTo").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},x(i,"bindsTo"))},
+    {k:"owner",l:"Designed by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))},
+    loc];
+  if(t==="strain") return [
+    {k:"no",l:"#",cls:"num",get:i=>+x(i,"strainNo")||1e9,cell:i=>h("td",{class:"num mono"},x(i,"strainNo"))},
+    {...name,cell:i=>h("td",{class:"name"},i.name,h("span",{class:"sub mono"},x(i,"genotype").replace(/\s*\n+\s*/g,"; ")))},
+    {k:"bg",l:"Backgr.",get:i=>x(i,"background").toLowerCase(),cell:i=>h("td",{},h("div",{class:"clip",style:"max-width:84px",title:x(i,"background")},x(i,"background")))},
+    {k:"mat",l:"Mating",get:i=>x(i,"mating"),cell:i=>h("td",{class:"mono"},x(i,"mating"))},
+    {k:"bar",l:"BAR",cls:"hide-sm",get:i=>x(i,"bar"),cell:i=>h("td",{class:"hide-sm"},x(i,"bar")==="BAR+"?h("span",{class:"pill low"},"BAR+"):x(i,"bar"))},
+    {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))},
+    {k:"origin",l:"Origin",cls:"hide-sm",get:i=>x(i,"origin").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},h("div",{class:"clip",style:"max-width:110px",title:x(i,"origin")},x(i,"origin")))},
+    {k:"notes",l:"Notes",get:i=>(i.notes||"").toLowerCase(),cell:i=>h("td",{},h("div",{class:"notes",title:i.notes||""},i.notes||""))}];
+  if(t==="plasmid") return [
+    {k:"no",l:"#",cls:"num",get:i=>+x(i,t+"No")||1e9,cell:i=>h("td",{class:"num mono"},x(i,t+"No"))},
+    {...name,cell:i=>h("td",{class:"name"},i.name,h("span",{class:"sub"},t==="plasmid"?[x(i,"backbone"),x(i,"insert")].filter(Boolean).join(" · "):x(i,"genotype")))},
+    {k:"box",l:"Freezer position",get:i=>x(i,"box"),cell:i=>h("td",{class:"mono"},x(i,"box"))},
+    {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))}, loc];
+  if(t==="equipment") return [name,cat,loc,price,{k:"serial",l:"Serial #",cls:"hide-sm",get:i=>x(i,"serial"),cell:i=>h("td",{class:"mono hide-sm"},x(i,"serial"))}];
+  return [name, t?null:typeC, cat, loc, size, stock, price, status].filter(Boolean);
+}
+function stockCell(it){
+  const td=h("td",{onclick:e=>e.stopPropagation()});
+  const has=typeof it.stock==="number";
+  const v=h("span",{class:"v"},has?String(it.stock):"–");
+  const bump=d=>()=>{ if(S.readonly) return; const cur=typeof it.stock==="number"?it.stock:0; const n=Math.max(0,cur+d); it.stock=n; v.textContent=n; queueStock(it.id,n); };
+  td.append(h("span",{class:"stock"},
+    h("button",{"aria-label":"Use one "+(it.name||""),title:"Used one",onclick:bump(-1),disabled:S.readonly},"−"), v,
+    h("button",{"aria-label":"Add one "+(it.name||""),title:"Add one",onclick:bump(1),disabled:S.readonly},"+")),
+    it.stockUnit?h("span",{style:"color:var(--muted);font-size:12px;margin-left:4px"},it.stockUnit):null);
+  return td;
+}
+const stockTimers=new Map();
+function queueStock(id,n){
+  clearTimeout(stockTimers.get(id));
+  stockTimers.set(id,setTimeout(async()=>{stockTimers.delete(id);
+    try{await db.collection("items").doc(id).update({stock:n,updatedBy:S.me,updatedAt:new Date().toISOString()})}catch(e){writeFailed(e)}},700));
+}
+function writeFailed(e){
+  if(e&&e.code==="permission-denied"){S.readonly=true;banner("Your account can't save changes. Ask the lab manager to add your email to the lab's list.");render()}
+  else if(e&&e.code==="resource-exhausted") toast("The database's free daily limit was reached. Try again tomorrow.");
+  else toast("Could not save. Check your connection and try again.");
+}
+function banner(msg){const b=$("#banner");b.textContent=msg;b.hidden=!msg}
+
+function renderRail(){
+  const counts={};for(const it of S.items.values())counts[it.type]=(counts[it.type]||0)+1;
+  const chip=(t,label,n)=>h("button",{class:"chip","aria-pressed":String(S.type===t),style:t?`--c:var(--t-${t})`:"",onclick:()=>{S.type=t;S.sort=null;render()}},t&&h("span",{class:"dot"}),label,h("span",{class:"n"},n||0));
+  $("#rail").replaceChildren(chip("","All items",S.items.size),...ORDER.map(t=>chip(t,TYPES[t].label,counts[t])));
+  const locs=[...new Set([...S.items.values()].filter(i=>!S.type||i.type===S.type).map(i=>i.location).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+  const sel=$("#loc"); if(S.loc && !locs.includes(S.loc)) S.loc="";
+  sel.replaceChildren(h("option",{value:""},"All locations"),...locs.map(l=>h("option",{value:l,selected:l===S.loc},l)));
+}
+function render(){
+  renderRail();
+  const cols=columns(), rows=filtered();
+  $("#thead").replaceChildren(h("tr",{},cols.map(c=>h("th",{class:c.cls||"",scope:"col",onclick:()=>{S.sort={k:c.k,get:c.get,dir:S.sort&&S.sort.k===c.k?-S.sort.dir:1};render()}},c.l,S.sort&&S.sort.k===c.k?(S.sort.dir>0?" ↑":" ↓"):""))));
+  $("#tbody").replaceChildren(...rows.map(it=>h("tr",{tabindex:"0",onclick:()=>openItem(it.id),onkeydown:e=>{if(e.key==="Enter")openItem(it.id)}},cols.map(c=>c.cell(it)))));
+  const empty=$("#empty");
+  if(!S.loaded){empty.hidden=false;empty.replaceChildren(h("strong",{},"Loading the lab inventory"),"Antibodies, chemicals, enzymes, oligos and supplies will appear here.")}
+  else if(!S.items.size){empty.hidden=false;empty.replaceChildren(h("strong",{},"No items yet"),"Use “+ Add item” to record the first reagent.")}
+  else if(!rows.length){empty.hidden=false;empty.replaceChildren(h("strong",{},"Nothing matches"),"Try a different search or clear the filters.")}
+  else empty.hidden=true;
+  if(S.loaded){const low=[...S.items.values()].filter(isLow).length, ex=[...S.items.values()].filter(expState).length;
+    $("#status").textContent=`${rows.length} shown · ${low} low on stock · ${ex} expiring`;}
+  renderBoard();
+}
+
+/* ---------- item sheet ---------- */
+function field(id,label,value,opts={}){
+  const ctl = opts.select ? h("select",{id},opts.select.map(([v,l])=>h("option",{value:v,selected:v===value},l)))
+    : opts.area ? h("textarea",{id,class:opts.mono?"mono":"",spellcheck:opts.mono?"false":null},value??"")
+    : h("input",{id,type:opts.type||"text",value:value??"",step:opts.step,min:opts.min,list:opts.list,inputmode:opts.inputmode});
+  if(S.readonly) ctl.disabled=true;
+  return h("div",{class:"f"+(opts.wide?" wide":"")},h("label",{for:id},label),ctl);
+}
+function closeSheet(){$("#sheet-root").replaceChildren();document.removeEventListener("keydown",escClose)}
+function escClose(e){if(e.key==="Escape")closeSheet()}
+function sheet(title,meta,body,foot){
+  const root=$("#sheet-root");
+  const s=h("aside",{class:"sheet",role:"dialog","aria-modal":"true","aria-label":title},
+    h("div",{class:"sheet-head"},h("div",{},h("h2",{},title),meta&&h("div",{class:"meta"},meta)),h("button",{class:"x","aria-label":"Close",onclick:closeSheet},"×")),
+    h("div",{class:"sheet-body"},body),h("div",{class:"sheet-foot"},foot));
+  root.replaceChildren(h("div",{class:"scrim",onclick:closeSheet}),s);
+  document.addEventListener("keydown",escClose);
+  setTimeout(()=>s.querySelector("input,select,textarea")?.focus(),30);
+}
+function locList(){return h("datalist",{id:"loclist"},[...new Set([...S.items.values()].map(i=>i.location).filter(Boolean))].sort().map(l=>h("option",{value:l})))}
+function openItem(id, preset){
+  const it = id ? S.items.get(id) : {type:preset||S.type||"chemical"};
+  if(!it) return;
+  const isNew=!id;
+  const typeSel=field("i-type","Type",it.type,{select:ORDER.map(t=>[t,TYPES[t].one])});
+  const extraBox=h("fieldset",{});
+  const seqInfo=h("div",{class:"seqinfo f wide"});
+  function drawExtra(type){
+    const defs=TYPES[type].extra;
+    extraBox.replaceChildren(h("legend",{},TYPES[type].one+" details"));
+    extraBox.hidden=!defs.length;
+    for(const [k,l,kind] of defs) extraBox.append(field("x-"+k,l,x(it,k),{wide:!!kind,area:!!kind,mono:kind==="seq"||kind==="seqtext"}));
+    if(type==="oligo"){extraBox.append(seqInfo);const ta=extraBox.querySelector("#x-sequence");const upd=()=>{const s=cleanSeq(ta.value);const gc=s?Math.round(100*(s.match(/[GC]/g)||[]).length/s.length):0;seqInfo.textContent=s?`${s.length} nt · GC ${gc}%`:""};ta.addEventListener("input",upd);upd()}
+  }
+  const body=[
+    h("fieldset",{},h("legend",{},"Item"),
+      h("div",{class:"f wide"},h("label",{for:"i-name"},"Name"),h("input",{id:"i-name",value:it.name||"",required:true,disabled:S.readonly})),
+      typeSel, field("i-catalog","Catalog #",it.catalog),
+      field("i-brand","Brand / manufacturer",it.brand), field("i-supplier","Supplier",it.supplier),
+      field("i-url","Product page (https://…)",it.url,{wide:true,type:"url"})),
+    h("fieldset",{},h("legend",{},"Stock & storage"),
+      field("i-location","Location",it.location,{list:"loclist"}), field("i-size","Unit size",it.size),
+      field("i-stock","Units in stock",it.stock,{type:"number",min:"0",step:"any",inputmode:"decimal"}), field("i-stockUnit","Counted as (box, vial…)",it.stockUnit),
+      field("i-minStock","Reorder when at or below",it.minStock,{type:"number",min:"0",step:"any",inputmode:"decimal"}), field("i-expiry","Expiration date",it.expiry,{type:"date"}),
+      field("i-lot","Lot number",it.lot), field("i-opened","Date opened",it.opened,{type:"date"}),
+      locList()),
+    extraBox,
+    h("fieldset",{},h("legend",{},"Purchasing"),
+      field("i-price","Price (€)",it.price,{type:"number",min:"0",step:"0.01",inputmode:"decimal"}), field("i-lastPurchase","Last purchased",it.lastPurchase,{type:"date"}),
+      field("i-notes","Notes",it.notes,{wide:true,area:true})),
+  ];
+  drawExtra(it.type);
+  typeSel.querySelector("select").addEventListener("change",e=>drawExtra(e.target.value));
+  const save=h("button",{class:"btn primary",disabled:S.readonly,onclick:async()=>{
+    const v=k=>document.getElementById(k).value.trim();
+    const n=k=>{const s=v(k);if(s==="")return null;const f=parseFloat(s.replace(",","."));return isNaN(f)?null:f};
+    const name=v("i-name"); if(!name){document.getElementById("i-name").focus();toast("Give the item a name.");return}
+    const type=v("i-type"); const extra={};
+    for(const [k] of TYPES[type].extra){const s=v("x-"+k);if(s)extra[k]=s}
+    const url=v("i-url");
+    const doc={type,name,catalog:v("i-catalog"),brand:v("i-brand"),supplier:v("i-supplier"),url:url.startsWith("https://")?url:"",location:v("i-location"),size:v("i-size"),
+      stock:n("i-stock"),stockUnit:v("i-stockUnit"),minStock:n("i-minStock"),expiry:v("i-expiry"),lot:v("i-lot"),opened:v("i-opened"),price:n("i-price"),lastPurchase:v("i-lastPurchase"),notes:v("i-notes"),extra,
+      createdBy:it.createdBy||S.me||null,createdAt:it.createdAt||new Date().toISOString(),updatedBy:S.me||null,updatedAt:new Date().toISOString()};
+    for(const k of Object.keys(doc)) if(doc[k]===""||doc[k]==null) delete doc[k];
+    save.disabled=true;
+    try{ const ref=isNew?db.collection("items").doc():db.collection("items").doc(id); await ref.set(doc); toast(isNew?"Item added":"Saved"); closeSheet(); }
+    catch(e){save.disabled=false;writeFailed(e)}
+  }},isNew?"Add item":"Save changes");
+  let armed=false;
+  const del=!isNew&&h("button",{class:"btn danger",disabled:S.readonly,onclick:async()=>{
+    if(!armed){armed=true;del.classList.add("armed");del.textContent="Click again to delete";setTimeout(()=>{armed=false;del.classList.remove("armed");del.textContent="Delete"},4000);return}
+    try{await db.collection("items").doc(id).delete();toast("Deleted");closeSheet()}catch(e){writeFailed(e)}}},"Delete");
+  const reorder=!isNew&&h("button",{class:"btn",disabled:S.readonly,onclick:()=>openRequest(null,it)},"Request reorder");
+  const meta=isNew?"New item":[TYPES[it.type]?.one, it.updatedAt?`Last edited ${new Date(it.updatedAt).toLocaleDateString()}${it.updatedBy?" by "+who(it.updatedBy):""}`:"Imported from the Quartzy spreadsheet"].filter(Boolean).join(" · ");
+  sheet(isNew?"Add item":it.name, meta, body, [del, h("span",{class:"spacer"}), reorder, h("button",{class:"btn",onclick:closeSheet},"Cancel"), save].filter(Boolean));
+}
+
+/* ---------- orders ---------- */
+function openRequest(rid, fromItem){
+  const r = rid ? S.reqs.get(rid) : {name:fromItem?.name||"",catalog:fromItem?.catalog||"",supplier:fromItem?.supplier||fromItem?.brand||"",unitPrice:fromItem?.price??null,qty:1,itemId:fromItem?.id||null};
+  const isNew=!rid;
+  const body=[h("fieldset",{},h("legend",{},"What to order"),
+    h("div",{class:"f wide"},h("label",{for:"r-name"},"Item"),h("input",{id:"r-name",value:r.name||"",disabled:S.readonly})),
+    field("r-catalog","Catalog #",r.catalog), field("r-supplier","Supplier",r.supplier),
+    field("r-qty","Quantity",r.qty,{type:"number",min:"1",step:"1",inputmode:"numeric"}), field("r-price","Unit price (€)",r.unitPrice,{type:"number",min:"0",step:"0.01"}),
+    field("r-urgent","Priority",r.urgent?"urgent":"normal",{select:[["normal","Normal"],["urgent","Urgent"]]}),
+    field("r-notes","Notes (grant, project, why)",r.notes,{wide:true,area:true})),
+    r.itemId&&S.items.has(r.itemId)?h("div",{class:"seqinfo"},"Linked to inventory: "+S.items.get(r.itemId).name+". Marking it received adds the quantity to stock."):null];
+  const save=h("button",{class:"btn primary",disabled:S.readonly,onclick:async()=>{
+    const v=k=>document.getElementById(k).value.trim();
+    const name=v("r-name"); if(!name){toast("Say what to order.");return}
+    const doc={...r,name,catalog:v("r-catalog"),supplier:v("r-supplier"),qty:Math.max(1,parseInt(v("r-qty"))||1),unitPrice:v("r-price")===""?null:parseFloat(v("r-price")),urgent:v("r-urgent")==="urgent",notes:v("r-notes")};
+    delete doc.id;
+    if(isNew){doc.status="requested";doc.requestedBy=S.me||null;doc.requestedAt=new Date().toISOString();doc.history=[{s:"requested",by:S.me||null,at:doc.requestedAt}]}
+    for(const k of Object.keys(doc)) if(doc[k]===""||doc[k]==null) delete doc[k];
+    save.disabled=true;
+    try{await (isNew?db.collection("requests").doc():db.collection("requests").doc(rid)).set(doc);toast(isNew?"Request sent to the Orders board":"Saved");closeSheet()}catch(e){save.disabled=false;writeFailed(e)}
+  }},isNew?"Submit request":"Save");
+  let armed=false;
+  const del=!isNew&&h("button",{class:"btn danger",disabled:S.readonly,onclick:async()=>{
+    if(!armed){armed=true;del.classList.add("armed");del.textContent="Click again to remove";setTimeout(()=>{armed=false;del.classList.remove("armed");del.textContent="Remove"},4000);return}
+    try{await db.collection("requests").doc(rid).delete();toast("Removed");closeSheet()}catch(e){writeFailed(e)}}},"Remove");
+  const meta=isNew?"New reorder request":`Requested ${new Date(r.requestedAt).toLocaleDateString()} by ${who(r.requestedBy)} · ${STATUSES.find(s=>s[0]===r.status)?.[1]}`;
+  sheet(isNew?"Request an order":r.name,meta,body,[del,h("span",{class:"spacer"}),h("button",{class:"btn",onclick:closeSheet},"Cancel"),save].filter(Boolean));
+}
+async function advance(r){
+  const i=STATUSES.findIndex(s=>s[0]===r.status); const next=STATUSES[i+1]; if(!next) return;
+  const at=new Date().toISOString();
+  try{
+    await db.collection("requests").doc(r.id).update({status:next[0],[next[0]+"At"]:at,[next[0]+"By"]:S.me||null,history:[...(r.history||[]),{s:next[0],by:S.me||null,at}]});
+    if(next[0]==="received" && r.itemId && S.items.has(r.itemId)){
+      const it=S.items.get(r.itemId); const n=(typeof it.stock==="number"?it.stock:0)+(r.qty||1);
+      const upd={stock:n,lastPurchase:at.slice(0,10),updatedBy:S.me||null,updatedAt:at}; if(typeof r.unitPrice==="number") upd.price=r.unitPrice;
+      await db.collection("items").doc(r.itemId).update(upd);
+      toast(`Received · ${it.name} now ${n} in stock`);
+    } else toast("Moved to "+next[1]);
+  }catch(e){writeFailed(e)}
+}
+function renderBoard(){
+  const all=[...S.reqs.values()];
+  const open=all.filter(r=>r.status!=="received").length;
+  $("#ord-count").textContent=open?String(open):"";
+  if(S.view!=="ord") return;
+  resolveNames(all.map(r=>r.requestedBy));
+  const cutoff=Date.now()-60*864e5;
+  $("#board").replaceChildren(...STATUSES.map(([s,l],idx)=>{
+    let list=all.filter(r=>r.status===s);
+    if(s==="received") list=list.filter(r=>Date.parse(r.receivedAt||r.requestedAt)>cutoff);
+    list.sort((a,b)=>(b.urgent-a.urgent)||String(a.requestedAt).localeCompare(String(b.requestedAt)));
+    const next=STATUSES[idx+1];
+    return h("div",{class:"col"},h("h3",{},h("span",{},l),h("span",{class:"mono"},list.length)),
+      list.length?list.map(r=>h("div",{class:"card"+(r.urgent?" urgent":"")},
+        h("div",{class:"t"},r.name),
+        h("div",{class:"m"},[r.qty+" ×",r.catalog,r.supplier,typeof r.unitPrice==="number"?eur.format(r.unitPrice*(r.qty||1)):""].filter(Boolean).join(" · ")),
+        h("div",{class:"m"},"Asked by "+who(r.requestedBy)+" · "+new Date(r.requestedAt).toLocaleDateString()),
+        r.notes&&h("div",{class:"m"},r.notes),
+        h("div",{class:"acts"},next&&h("button",{class:"btn sm primary",disabled:S.readonly,onclick:()=>advance(r)},next[0]==="received"?"Mark received":"Mark "+next[1].toLowerCase()),h("button",{class:"btn sm",onclick:()=>openRequest(r.id)},"Details"))
+      )):h("div",{class:"none"},s==="requested"?"No open requests. Open an item and choose “Request reorder”.":s==="received"?"Nothing received in the last 60 days.":"Empty"));
+  }));
+}
+
+/* ---------- export ---------- */
+async function exportCsv(){
+  const rows=filtered(); const extraKeys=[...new Set(rows.flatMap(r=>Object.keys(r.extra||{})))];
+  const cols=["type","name","brand","supplier","catalog","location","size","stock","stockUnit","minStock","price","lot","expiry","opened","lastPurchase","url","notes"];
+  const esc=v=>{v=v==null?"":String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
+  const csv=[[...cols,...extraKeys].join(","),...rows.map(r=>[...cols.map(c=>esc(r[c])),...extraKeys.map(k=>esc(x(r,k)))].join(","))].join("\n");
+  saveFile(`lucena-lab-inventory-${today()}.csv`,"﻿"+csv,"text/csv;charset=utf-8");
+}
+function saveFile(name,text,type){
+  const url=URL.createObjectURL(new Blob([text],{type}));
+  const a=h("a",{href:url,download:name});document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);
+}
+
+/* ---------- backup & restore ---------- */
+function openBackup(){
+  const status=h("div",{class:"seqinfo"});
+  const file=h("input",{id:"restore-file",type:"file",accept:"application/json,.json"});
+  let armed=false;
+  const restore=h("button",{class:"btn danger",disabled:S.readonly,onclick:async()=>{
+    const f=file.files[0]; if(!f){toast("Choose a backup file first.");return}
+    if(!armed){armed=true;restore.classList.add("armed");restore.textContent="Click again to restore";return}
+    restore.disabled=true;
+    try{
+      const data=JSON.parse(await f.text());
+      if(data.format!=="lab-inventory-backup-1") throw new Error("This file is not a Lab Inventory backup.");
+      let done=0;
+      for(const col of ["items","requests"]){
+        const entries=Object.entries(data[col]||{});
+        for(let i=0;i<entries.length;i+=400){
+          const b=db.batch();
+          for(const [id,doc] of entries.slice(i,i+400)) b.set(db.collection(col).doc(id),doc);
+          await b.commit(); done+=Math.min(400,entries.length-i); status.textContent=`Restored ${done} records…`;
+        }
+      }
+      status.textContent=`Restore finished: ${done} records.`; toast("Backup restored");
+    }catch(e){status.textContent="Restore failed: "+(e.code==="permission-denied"?"your account can't write to the database.":e.message);restore.disabled=false}
+  }},"Restore from file");
+  const dl=h("button",{class:"btn primary",onclick:()=>{
+    const obj={format:"lab-inventory-backup-1",exportedAt:new Date().toISOString(),items:{},requests:{}};
+    for(const [id,it] of S.items){const {id:_,...rest}=it;obj.items[id]=rest}
+    for(const [id,r] of S.reqs){const {id:_,...rest}=r;obj.requests[id]=rest}
+    saveFile(`lucena-lab-backup-${today()}.json`,JSON.stringify(obj),"application/json");
+  }},"Download backup");
+  sheet("Backup","Keep a copy of everything, or restore one",[
+    h("fieldset",{},h("legend",{},"Download"),h("p",{class:"f wide",style:"margin:0"},`Saves all ${S.items.size} items and ${S.reqs.size} order requests as one JSON file. Keep it somewhere private, such as your OneDrive.`),h("div",{class:"f wide"},dl)),
+    h("fieldset",{},h("legend",{},"Restore"),h("p",{class:"f wide",style:"margin:0"},"Writes every record from a backup file into the database. Records with the same ID are replaced; nothing else is deleted."),h("div",{class:"f wide"},file),h("div",{class:"f wide"},restore),status)
+  ],[h("span",{class:"spacer"}),h("button",{class:"btn",onclick:closeSheet},"Close")]);
+}
+
+/* ---------- wiring ---------- */
+$("#v-inv").onclick=()=>{S.view="inv";$("#inv").hidden=false;$("#ord").hidden=true;$("#v-inv").setAttribute("aria-pressed","true");$("#v-ord").setAttribute("aria-pressed","false");render()};
+$("#v-ord").onclick=()=>{S.view="ord";$("#inv").hidden=true;$("#ord").hidden=false;$("#v-ord").setAttribute("aria-pressed","true");$("#v-inv").setAttribute("aria-pressed","false");renderBoard()};
+$("#q").addEventListener("input",e=>{S.q=e.target.value;if(S.view!=="inv")$("#v-inv").click();else render()});
+$("#loc").addEventListener("change",e=>{S.loc=e.target.value;render()});
+$("#f-low").onclick=e=>{S.low=!S.low;e.currentTarget.setAttribute("aria-pressed",String(S.low));render()};
+$("#f-exp").onclick=e=>{S.exp=!S.exp;e.currentTarget.setAttribute("aria-pressed",String(S.exp));render()};
+$("#add").onclick=()=>openItem(null);
+$("#new-req").onclick=()=>openRequest(null,null);
+$("#export").onclick=exportCsv;
+$("#backup-btn").onclick=openBackup;
+render();
+
+/* ---------- Firebase sign-in & data ---------- */
+const cfg=window.LAB_CONFIG&&window.LAB_CONFIG.firebase;
+if(!cfg||!cfg.apiKey||cfg.apiKey.startsWith("PASTE")){ $("#status").textContent="This copy isn't connected to a database yet: fill in firebase-config.js."; }
+else{
+  firebase.initializeApp(cfg);
+  const auth=firebase.auth(); db=firebase.firestore();
+  const gate=$("#gate"), msg=$("#gate-msg"), emailIn=$("#gate-email");
+  const setMsg=(t,bad)=>{msg.textContent=t;msg.style.color=bad?"var(--crit)":"var(--muted)"};
+  let unsub=[];
+  $("#signout").onclick=()=>auth.signOut();
+  $("#gate-google").onclick=async()=>{try{await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider())}catch(e){if(e.code!=="auth/popup-closed-by-user")setMsg("Google sign-in failed: "+e.message,true)}};
+  $("#gate-form").addEventListener("submit",async e=>{
+    e.preventDefault(); const email=emailIn.value.trim().toLowerCase(); if(!email) return;
+    try{
+      await auth.sendSignInLinkToEmail(email,{url:location.origin+location.pathname,handleCodeInApp:true});
+      try{localStorage.setItem("labSignInEmail",email)}catch{}
+      setMsg(`Sign-in link sent to ${email}. Open it on this device. Check spam if it doesn't arrive in a minute.`);
+    }catch(err){setMsg("Couldn't send the link: "+err.message,true)}
+  });
+  if(auth.isSignInWithEmailLink(location.href)){
+    let email=""; try{email=localStorage.getItem("labSignInEmail")||""}catch{}
+    const finish=async em=>{try{await auth.signInWithEmailLink(em,location.href);history.replaceState(null,"",location.pathname)}catch(err){setMsg("That sign-in link didn't work ("+err.code+"). Request a new one.",true)}};
+    if(email) finish(email); else setMsg("Type your email again to finish signing in, then press Send. Or open the link on the device where you asked for it.");
+  }
+  auth.onAuthStateChanged(u=>{
+    unsub.forEach(f=>f()); unsub=[]; S.items=new Map(); S.reqs=new Map(); S.loaded=false;
+    if(!u){ gate.hidden=false; $("#signout").hidden=true; $("#who").textContent=""; render(); return; }
+    gate.hidden=true; $("#signout").hidden=false;
+    S.me=(u.email||"").toLowerCase(); $("#who").textContent="Signed in as "+(u.displayName||S.me);
+    const timer=setTimeout(()=>{if(!S.loaded)$("#status").textContent="Still waiting for the database. Check your connection."},10000);
+    const denied=e=>{clearTimeout(timer);S.loaded=true;
+      if(e.code==="permission-denied"){banner(`${S.me} isn't on the lab's list of allowed accounts. Ask the lab manager to add it, or sign out and use another email.`);S.readonly=true}
+      else $("#status").textContent="Lost connection to the database. Reload to reconnect.";
+      render()};
+    unsub.push(db.collection("items").onSnapshot(snap=>{
+      S.items=new Map(snap.docs.map(d=>[d.id,{id:d.id,...d.data()}]));
+      if(!snap.metadata.fromCache){S.loaded=true;clearTimeout(timer);banner("");S.readonly=false}
+      render();
+    },denied));
+    unsub.push(db.collection("requests").onSnapshot(snap=>{S.reqs=new Map(snap.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderBoard()},()=>{}));
+  });
+}
+})();
+</script>
+</body>
+</html>

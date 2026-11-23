@@ -1,0 +1,5 @@
+.DS_Store
+*.rules
+!firestore.rules.example
+private-backup/
+*backup*.json
