@@ -12,5 +12,5 @@ window.LAB_CONFIG = {
   },
   // Web-app address of the Google Apps Script that emails new order requests
   // (see notify/Code.gs and README). Leave empty to send no emails.
-  notifyUrl: ""
+  notifyUrl: "https://script.google.com/macros/s/AKfycbxWr6MHfPbvpj7sw86DuicDK58iCuceRtcPKxg78w_-AJLsFEjfhNSwaLBKdArrXizeKw/exec"
 };
