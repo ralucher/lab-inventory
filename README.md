@@ -20,6 +20,18 @@ A shared inventory for the lab: antibodies, chemicals, enzymes and kits, oligos,
 
 Edit the email list in the rules (*Firestore Database → Rules*) and click *Publish*. Emails must be lowercase. The change applies within a minute.
 
+## Email when someone requests an order
+
+A small Google Apps Script (`notify/Code.gs`) emails ralucher@gmail.com from that Gmail account each time a new order request is submitted. It only sends for real requests made by people on the lab's list.
+
+1. Signed in as ralucher@gmail.com, go to https://script.google.com → **New project**. Name it "Lab inventory emails".
+2. Replace the editor's contents with `notify/Code.gs` and save.
+3. Choose the function **authorize** in the toolbar → **Run** → allow the permissions (send email, connect to an external service).
+4. **Deploy → New deployment** → type **Web app** → *Execute as:* **Me** → *Who has access:* **Anyone** → **Deploy**. Copy the *Web app URL* (it ends in `/exec`).
+5. Paste that URL into `notifyUrl` in `firebase-config.js` and push.
+
+If you edit the script later, use **Deploy → Manage deployments → Edit → Version: New version** so the URL stays the same.
+
 ## Backups
 
 In the app, **Backup → Download backup** saves everything as one JSON file. **Restore from file** writes a backup back into the database. Keep backup files private; don't commit them to this repository.

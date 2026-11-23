@@ -276,13 +276,15 @@ function columns(){
   const stock={k:"stock",l:"In stock",get:i=>typeof i.stock==="number"?i.stock:"",cell:stockCell};
   const price={k:"price",l:"Price",cls:"num hide-sm",get:i=>typeof i.price==="number"?i.price:"",cell:i=>h("td",{class:"num hide-sm"},typeof i.price==="number"&&i.price>0?eur.format(i.price):"")};
   const status={k:"st",l:"",get:i=>0,cell:i=>{const td=h("td",{});if(isLow(i))td.append(h("span",{class:"pill "+(i.stock<=0?"out":"low")},i.stock<=0?"Out":"Low"));const e=expState(i);if(e)td.append(" ",h("span",{class:"pill "+e},e==="exp"?"Expired":"Expires "+i.expiry));return td}};
+  const lastOrd={k:"lastOrd",l:"Last ordered",cls:"hide-sm",get:i=>lastOrderedOf(i),cell:i=>{const d=lastOrderedOf(i);return h("td",{class:"hide-sm mono",style:"white-space:nowrap"},d?fmtDate(d):h("span",{style:"color:var(--muted)"},"—"))}};
+  const reorder={k:"reorder",l:"",get:i=>0,cell:reorderCell};
   if(t==="oligo") return [
     {k:"no",l:"#",cls:"num",get:i=>+x(i,"oligoNo")||1e9,cell:i=>h("td",{class:"num mono"},x(i,"oligoNo"))},
     {...name,cell:i=>h("td",{class:"name"},i.name)},
     {k:"seq",l:"Sequence",get:i=>cleanSeq(x(i,"sequence")).length,cell:i=>{const s=cleanSeq(x(i,"sequence"));return h("td",{},h("div",{class:"seq",title:s},s),s&&h("span",{class:"sub mono",style:"font-size:11px;color:var(--muted)"},s.length+" nt"))}},
     {k:"binds",l:"Binds to",cls:"hide-sm",get:i=>x(i,"bindsTo").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},x(i,"bindsTo"))},
     {k:"owner",l:"Designed by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))},
-    loc];
+    loc, lastOrd, reorder];
   if(t==="strain") return [
     {k:"no",l:"#",cls:"num",get:i=>+x(i,"strainNo")||1e9,cell:i=>h("td",{class:"num mono"},x(i,"strainNo"))},
     {...name,cell:i=>h("td",{class:"name"},i.name,h("span",{class:"sub mono"},x(i,"genotype").replace(/\s*\n+\s*/g,"; ")))},
@@ -297,8 +299,20 @@ function columns(){
     {...name,cell:i=>h("td",{class:"name"},i.name,h("span",{class:"sub"},t==="plasmid"?[x(i,"backbone"),x(i,"insert")].filter(Boolean).join(" · "):x(i,"genotype")))},
     {k:"box",l:"Freezer position",get:i=>x(i,"box"),cell:i=>h("td",{class:"mono"},x(i,"box"))},
     {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))}, loc];
-  if(t==="equipment") return [name,cat,loc,price,{k:"serial",l:"Serial #",cls:"hide-sm",get:i=>x(i,"serial"),cell:i=>h("td",{class:"mono hide-sm"},x(i,"serial"))}];
-  return [name, t?null:typeC, cat, loc, size, stock, price, status].filter(Boolean);
+  if(t==="equipment") return [name,cat,loc,price,{k:"serial",l:"Serial #",cls:"hide-sm",get:i=>x(i,"serial"),cell:i=>h("td",{class:"mono hide-sm"},x(i,"serial"))},lastOrd,reorder];
+  return [name, t?null:typeC, cat, loc, size, stock, price, lastOrd, status, reorder].filter(Boolean);
+}
+const ORDERABLE=new Set(["antibody","chemical","enzyme","oligo","supply","equipment"]);
+function lastOrderedOf(i){return i.lastOrdered||i.lastPurchase||""}
+function fmtDate(d){const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(d);return m?`${m[3]}/${m[2]}/${m[1]}`:d}
+function openRequestFor(itemId){for(const r of S.reqs.values()) if(r.itemId===itemId&&r.status!=="received") return r; return null}
+function reorderCell(it){
+  const td=h("td",{style:"white-space:nowrap",onclick:e=>e.stopPropagation()});
+  if(!ORDERABLE.has(it.type)) return td;
+  const open=openRequestFor(it.id);
+  if(open){td.append(h("button",{class:"pill soon",style:"border:0;cursor:pointer",title:"Open this request on the Orders board",onclick:()=>{showOrders();openRequest(open.id)}},(STATUSES.find(s=>s[0]===open.status)||["","Requested"])[1]));return td}
+  td.append(h("button",{class:"btn sm",disabled:S.readonly,"aria-label":"Reorder "+(it.name||""),onclick:()=>openRequest(null,it)},"Reorder"));
+  return td;
 }
 function stockCell(it){
   const td=h("td",{onclick:e=>e.stopPropagation()});
@@ -308,7 +322,7 @@ function stockCell(it){
   td.append(h("span",{class:"stock"},
     h("button",{"aria-label":"Use one "+(it.name||""),title:"Used one",onclick:bump(-1),disabled:S.readonly},"−"), v,
     h("button",{"aria-label":"Add one "+(it.name||""),title:"Add one",onclick:bump(1),disabled:S.readonly},"+")),
-    it.stockUnit?h("span",{style:"color:var(--muted);font-size:12px;margin-left:4px"},it.stockUnit):null);
+    ...(it.stockUnit?[h("span",{style:"color:var(--muted);font-size:12px;margin-left:4px"},it.stockUnit)]:[]));
   return td;
 }
 const stockTimers=new Map();
@@ -443,7 +457,12 @@ function openRequest(rid, fromItem){
     if(isNew){doc.status="requested";doc.requestedBy=S.me||null;doc.requestedAt=new Date().toISOString();doc.history=[{s:"requested",by:S.me||null,at:doc.requestedAt}]}
     for(const k of Object.keys(doc)) if(doc[k]===""||doc[k]==null) delete doc[k];
     save.disabled=true;
-    try{await (isNew?db.collection("requests").doc():db.collection("requests").doc(rid)).set(doc);toast(isNew?"Request sent to the Orders board":"Saved");closeSheet()}catch(e){save.disabled=false;writeFailed(e)}
+    try{
+      const ref=isNew?db.collection("requests").doc():db.collection("requests").doc(rid);
+      await ref.set(doc);
+      closeSheet();
+      if(isNew){showOrders();toast("Request added to the Orders board");notifyNewRequest(ref.id)} else toast("Saved");
+    }catch(e){save.disabled=false;writeFailed(e)}
   }},isNew?"Submit request":"Save");
   let armed=false;
   const del=!isNew&&h("button",{class:"btn danger",disabled:S.readonly,onclick:async()=>{
@@ -452,12 +471,24 @@ function openRequest(rid, fromItem){
   const meta=isNew?"New reorder request":`Requested ${new Date(r.requestedAt).toLocaleDateString()} by ${who(r.requestedBy)} · ${STATUSES.find(s=>s[0]===r.status)?.[1]}`;
   sheet(isNew?"Request an order":r.name,meta,body,[del,h("span",{class:"spacer"}),h("button",{class:"btn",onclick:closeSheet},"Cancel"),save].filter(Boolean));
 }
+function showOrders(){$("#v-ord").click()}
+async function notifyNewRequest(requestId){
+  const url=window.LAB_CONFIG&&window.LAB_CONFIG.notifyUrl;
+  if(!url||!/^https:\/\/script\.google\.com\//.test(url)) return;
+  try{
+    const idToken=await firebase.auth().currentUser.getIdToken();
+    await fetch(url,{method:"POST",mode:"no-cors",headers:{"Content-Type":"text/plain;charset=utf-8"},body:JSON.stringify({idToken,requestId})});
+  }catch(e){console.warn("Order email not sent",e)}
+}
 async function advance(r){
   const i=STATUSES.findIndex(s=>s[0]===r.status); const next=STATUSES[i+1]; if(!next) return;
   const at=new Date().toISOString();
   try{
     await db.collection("requests").doc(r.id).update({status:next[0],[next[0]+"At"]:at,[next[0]+"By"]:S.me||null,history:[...(r.history||[]),{s:next[0],by:S.me||null,at}]});
-    if(next[0]==="received" && r.itemId && S.items.has(r.itemId)){
+    if(next[0]==="ordered" && r.itemId && S.items.has(r.itemId)){
+      await db.collection("items").doc(r.itemId).update({lastOrdered:at.slice(0,10),updatedBy:S.me||null,updatedAt:at});
+      toast("Moved to Ordered · last-ordered date updated");
+    } else if(next[0]==="received" && r.itemId && S.items.has(r.itemId)){
       const it=S.items.get(r.itemId); const n=(typeof it.stock==="number"?it.stock:0)+(r.qty||1);
       const upd={stock:n,lastPurchase:at.slice(0,10),updatedBy:S.me||null,updatedAt:at}; if(typeof r.unitPrice==="number") upd.price=r.unitPrice;
       await db.collection("items").doc(r.itemId).update(upd);
@@ -491,7 +522,7 @@ function renderBoard(){
 /* ---------- export ---------- */
 async function exportCsv(){
   const rows=filtered(); const extraKeys=[...new Set(rows.flatMap(r=>Object.keys(r.extra||{})))];
-  const cols=["type","name","brand","supplier","catalog","location","size","stock","stockUnit","minStock","price","lot","expiry","opened","lastPurchase","url","notes"];
+  const cols=["type","name","brand","supplier","catalog","location","size","stock","stockUnit","minStock","price","lot","expiry","opened","lastOrdered","lastPurchase","url","notes"];
   const esc=v=>{v=v==null?"":String(v);return /[",\n;]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v};
   const csv=[[...cols,...extraKeys].join(","),...rows.map(r=>[...cols.map(c=>esc(r[c])),...extraKeys.map(k=>esc(x(r,k)))].join(","))].join("\n");
   saveFile(`lucena-lab-inventory-${today()}.csv`,"﻿"+csv,"text/csv;charset=utf-8");
@@ -589,7 +620,7 @@ else{
       if(!snap.metadata.fromCache){S.loaded=true;clearTimeout(timer);banner("");S.readonly=false}
       render();
     },denied));
-    unsub.push(db.collection("requests").onSnapshot(snap=>{S.reqs=new Map(snap.docs.map(d=>[d.id,{id:d.id,...d.data()}]));renderBoard()},()=>{}));
+    unsub.push(db.collection("requests").onSnapshot(snap=>{S.reqs=new Map(snap.docs.map(d=>[d.id,{id:d.id,...d.data()}]));render()},()=>{}));
   });
 }
 })();

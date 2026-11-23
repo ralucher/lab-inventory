@@ -9,5 +9,8 @@ window.LAB_CONFIG = {
     storageBucket: "lucena-alcaide-lab.firebasestorage.app",
     messagingSenderId: "763482265482",
     appId: "1:763482265482:web:329307e780c8abfc3f1a73"
-  }
+  },
+  // Web-app address of the Google Apps Script that emails new order requests
+  // (see notify/Code.gs and README). Leave empty to send no emails.
+  notifyUrl: ""
 };
