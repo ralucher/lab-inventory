@@ -17,7 +17,7 @@
   --bg:#f6f7f6; --surface:#ffffff; --sunk:#eef1ef; --line:#d9dfdb; --fg:#17211c; --muted:#5c6b63;
   --accent:#0f6b5a; --accent-fg:#ffffff; --accent-soft:#dcefe9;
   --warn:#a15c00; --warn-soft:#fbecd6; --crit:#b4232c; --crit-soft:#f9dfe0; --ok:#2d7a3e; --ok-soft:#e0f0e3;
-  --t-antibody:#7a4bb8; --t-chemical:#0f6b5a; --t-enzyme:#b8532a; --t-oligo:#2b62b5; --t-supply:#6b6f2a; --t-equipment:#5a5f66; --t-plasmid:#a8327a; --t-strain:#8a6a12;
+  --t-antibody:#7a4bb8; --t-chemical:#0f6b5a; --t-enzyme:#b8532a; --t-oligo:#2b62b5; --t-supply:#6b6f2a; --t-equipment:#5a5f66; --t-plasmid:#a8327a; --t-strain:#8a6a12; --t-bacteria:#3f7f2a;
   --font-display:"Instrument Sans", "IBM Plex Sans", system-ui, sans-serif;
   --font-body:"IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono:"IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
@@ -27,13 +27,13 @@
   --bg:#0f1412; --surface:#161d1a; --sunk:#1c2521; --line:#2a3530; --fg:#e4ebe7; --muted:#93a39a;
   --accent:#4cc3a6; --accent-fg:#06221b; --accent-soft:#163a31;
   --warn:#f0b14f; --warn-soft:#3a2b12; --crit:#ff7b82; --crit-soft:#3d1a1d; --ok:#7bd08c; --ok-soft:#173222;
-  --t-antibody:#b896ec; --t-chemical:#4cc3a6; --t-enzyme:#f09a72; --t-oligo:#7fa9f0; --t-supply:#c3c77a; --t-equipment:#a7adb5; --t-plasmid:#ef86c4; --t-strain:#e0c060;
+  --t-antibody:#b896ec; --t-chemical:#4cc3a6; --t-enzyme:#f09a72; --t-oligo:#7fa9f0; --t-supply:#c3c77a; --t-equipment:#a7adb5; --t-plasmid:#ef86c4; --t-strain:#e0c060; --t-bacteria:#8fd16f;
   --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark}}
 :root[data-theme="dark"]{
   --bg:#0f1412; --surface:#161d1a; --sunk:#1c2521; --line:#2a3530; --fg:#e4ebe7; --muted:#93a39a;
   --accent:#4cc3a6; --accent-fg:#06221b; --accent-soft:#163a31;
   --warn:#f0b14f; --warn-soft:#3a2b12; --crit:#ff7b82; --crit-soft:#3d1a1d; --ok:#7bd08c; --ok-soft:#173222;
-  --t-antibody:#b896ec; --t-chemical:#4cc3a6; --t-enzyme:#f09a72; --t-oligo:#7fa9f0; --t-supply:#c3c77a; --t-equipment:#a7adb5; --t-plasmid:#ef86c4; --t-strain:#e0c060;
+  --t-antibody:#b896ec; --t-chemical:#4cc3a6; --t-enzyme:#f09a72; --t-oligo:#7fa9f0; --t-supply:#c3c77a; --t-equipment:#a7adb5; --t-plasmid:#ef86c4; --t-strain:#e0c060; --t-bacteria:#8fd16f;
   --shadow:0 12px 40px rgba(0,0,0,.5); color-scheme:dark}
 *{box-sizing:border-box}
 [hidden]{display:none!important}
@@ -218,10 +218,12 @@ const TYPES = {
   oligo:{label:"Oligos",one:"Oligo",extra:[["oligoNo","Oligo #"],["owner","Designed by"],["sequence","Sequence 5′→3′","seq"],["bindsTo","Binds to / template"],["application","Application"],["tm","Tm (°C)"]]},
   plasmid:{label:"Plasmids",one:"Plasmid",extra:[["plasmidNo","Plasmid #"],["backbone","Backbone"],["insert","Insert"],["resistance","Bacterial resistance"],["marker","Yeast marker"],["box","Freezer box / position"],["owner","Made by"]]},
   strain:{label:"Strains",one:"Strain",extra:[["strainNo","Number"],["owner","Your name"],["genotype","Chromosomal genotype","seqtext"],["background","Strain background"],["mating","Mating type"],["bar","BAR status (BAR+ / BAR−)"],["origin","Lab of origin"],["prevName","Previous / other-lab name"],["kelloggName","Kellogg lab strain name"],["notebook","Notebook reference"],["entered","Date entered","date"],["repPlasmid","Replicating plasmid"],["intPlasmid","Integrated plasmid"],["plasmidMarker","Plasmid marker"],["box","Freezer box / position"],["reference","Reference for construction of strain",1]]},
+  bacteria:{label:"Bacteria",one:"Bacterial strain",extra:[["strainNo","Number"],["owner","Your name"],["genotype","Plasmid / genotype","seqtext"],["background","Host / background"],["bar","BAR status (BAR+ / BAR−)"],["origin","Lab of origin"],["prevName","Previous / other-lab name"],["kelloggName","Kellogg lab strain name"],["notebook","Notebook reference"],["entered","Date entered","date"],["repPlasmid","Replicating plasmid"],["intPlasmid","Integrated plasmid"],["plasmidMarker","Plasmid marker"],["box","Freezer box / position"],["reference","Reference for construction of strain",1]]},
   supply:{label:"Supplies",one:"Supply",extra:[]},
   equipment:{label:"Equipment",one:"Equipment",extra:[["serial","Serial #"],["contact","Service contact"],["maintenance","Maintenance notes",1]]},
 };
-const ORDER = ["antibody","chemical","enzyme","oligo","plasmid","strain","supply","equipment"];
+const ORDER = ["antibody","chemical","enzyme","oligo","plasmid","strain","bacteria","supply","equipment"];
+const STRAINLIKE = new Set(["strain","bacteria"]);
 const STATUSES = [["requested","Requested"],["approved","Approved"],["ordered","Ordered"],["received","Received"]];
 const $ = s => document.querySelector(s);
 const eur = new Intl.NumberFormat("es-ES",{style:"currency",currency:"EUR"});
@@ -265,7 +267,7 @@ function filtered(){
   });
   const s=S.sort;
   if(s){arr.sort((a,b)=>{const va=s.get(a),vb=s.get(b);if(va===vb)return 0;if(va===""||va==null)return 1;if(vb===""||vb==null)return -1;return (va<vb?-1:1)*s.dir})}
-  else if(S.type==="strain") arr.sort((a,b)=> (+x(b,"strainNo")||0)-(+x(a,"strainNo")||0) || String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  else if(STRAINLIKE.has(S.type)) arr.sort((a,b)=> (+x(b,"strainNo")||0)-(+x(a,"strainNo")||0) || String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   else arr.sort((a,b)=> a.type===b.type && a.type==="oligo" ?(+x(a,"oligoNo")||1e9)-(+x(b,"oligoNo")||1e9) : ORDER.indexOf(a.type)-ORDER.indexOf(b.type) || (a.name||"").localeCompare(b.name||""));
   return arr;
 }
@@ -288,11 +290,11 @@ function columns(){
     {k:"binds",l:"Binds to",cls:"hide-sm",get:i=>x(i,"bindsTo").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},x(i,"bindsTo"))},
     {k:"owner",l:"Designed by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))},
     loc, lastOrd, reorder];
-  if(t==="strain") return [
+  if(STRAINLIKE.has(t)) return [
     {k:"no",l:"#",cls:"num",get:i=>+x(i,"strainNo")||1e9,cell:i=>h("td",{class:"num mono"},x(i,"strainNo"))},
     {...name,cell:i=>h("td",{class:"name"},i.name,h("span",{class:"sub mono"},x(i,"genotype").replace(/\s*\n+\s*/g,"; ")))},
     {k:"bg",l:"Backgr.",get:i=>x(i,"background").toLowerCase(),cell:i=>h("td",{},h("div",{class:"clip",style:"max-width:84px",title:x(i,"background")},x(i,"background")))},
-    {k:"mat",l:"Mating",get:i=>x(i,"mating"),cell:i=>h("td",{class:"mono"},x(i,"mating"))},
+    ...(t==="strain"?[{k:"mat",l:"Mating",get:i=>x(i,"mating"),cell:i=>h("td",{class:"mono"},x(i,"mating"))}]:[]),
     {k:"bar",l:"BAR",cls:"hide-sm",get:i=>x(i,"bar"),cell:i=>h("td",{class:"hide-sm"},x(i,"bar")==="BAR+"?h("span",{class:"pill low"},"BAR+"):x(i,"bar"))},
     {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))},
     {k:"origin",l:"Origin",cls:"hide-sm",get:i=>x(i,"origin").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},h("div",{class:"clip",style:"max-width:110px",title:x(i,"origin")},x(i,"origin")))},
@@ -316,7 +318,7 @@ function reorderCell(it){
     if(open) td.append(h("button",{class:"pill soon",style:"border:0;cursor:pointer",title:"Open this request on the Orders board",onclick:()=>{showOrders();openRequest(open.id)}},(STATUSES.find(s=>s[0]===open.status)||["","Requested"])[1]));
     else td.append(h("button",{class:"btn sm",disabled:S.readonly,"aria-label":"Reorder "+(it.name||""),onclick:()=>openRequest(null,it)},"Reorder"));
   }
-  if(it.type==="strain") td.append(h("button",{class:"btn sm",disabled:S.readonly,title:"New "+(TYPES[it.type]?.one||"item").toLowerCase()+" copied from this one","aria-label":"Duplicate "+(it.name||""),onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate"));
+  if(STRAINLIKE.has(it.type)) td.append(h("button",{class:"btn sm",disabled:S.readonly,title:"New "+(TYPES[it.type]?.one||"item").toLowerCase()+" copied from this one","aria-label":"Duplicate "+(it.name||""),onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate"));
   return td;
 }
 function stockCell(it){
@@ -394,8 +396,8 @@ function duplicateTemplate(src){
   copy.extra={...(copy.extra||{})};
   copy._copyOf=src.name||"item";
   const num=k=>Math.max(0,...[...S.items.values()].filter(i=>i.type===src.type).map(i=>parseInt(x(i,k))||0))+1;
-  if(src.type==="strain"||src.type==="plasmid"||src.type==="oligo"){
-    const key=src.type==="oligo"?"oligoNo":src.type+"No";
+  if(STRAINLIKE.has(src.type)||src.type==="plasmid"||src.type==="oligo"){
+    const key=src.type==="oligo"?"oligoNo":STRAINLIKE.has(src.type)?"strainNo":src.type+"No";
     const next=num(key); copy.extra[key]=String(next);
     const prefix=(/^([A-Za-z]+)\d+$/.exec(src.name||"")||[])[1];
     copy.name=prefix?prefix+next:"";
@@ -446,7 +448,7 @@ function openItem(id, preset){
     const name=v("i-name"); if(!name){document.getElementById("i-name").focus();toast("Give the item a name.");return}
     const type=v("i-type"); const extra={};
     for(const [k] of TYPES[type].extra){const s=v("x-"+k);if(s)extra[k]=s}
-    if(type==="strain"&&!extra.entered) extra.entered=today();
+    if(STRAINLIKE.has(type)&&!extra.entered) extra.entered=today();
     const url=v("i-url");
     const doc={type,name,catalog:v("i-catalog"),brand:v("i-brand"),supplier:v("i-supplier"),url:url.startsWith("https://")?url:"",location:v("i-location"),size:v("i-size"),
       stock:n("i-stock"),stockUnit:v("i-stockUnit"),minStock:n("i-minStock"),expiry:v("i-expiry"),lot:v("i-lot"),opened:v("i-opened"),price:n("i-price"),lastPurchase:v("i-lastPurchase"),notes:v("i-notes"),extra,
@@ -461,9 +463,9 @@ function openItem(id, preset){
     if(!armed){armed=true;del.classList.add("armed");del.textContent="Click again to delete";setTimeout(()=>{armed=false;del.classList.remove("armed");del.textContent="Delete"},4000);return}
     try{await db.collection("items").doc(id).delete();toast("Deleted");closeSheet()}catch(e){writeFailed(e)}}},"Delete");
   const reorder=!isNew&&ORDERABLE.has(it.type)&&h("button",{class:"btn",disabled:S.readonly,onclick:()=>openRequest(null,it)},"Request reorder");
-  const dup=!isNew&&it.type==="strain"&&h("button",{class:"btn",disabled:S.readonly,title:"Start a new "+(TYPES[it.type]?.one||"item").toLowerCase()+" with this one's details",onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate");
+  const dup=!isNew&&STRAINLIKE.has(it.type)&&h("button",{class:"btn",disabled:S.readonly,title:"Start a new "+(TYPES[it.type]?.one||"item").toLowerCase()+" with this one's details",onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate");
   const isCopy=isNew&&preset&&typeof preset==="object";
-  const meta=isCopy?"New "+(TYPES[it.type]?.one||"item").toLowerCase()+", copied — change what's different and add it":isNew?"New item":[TYPES[it.type]?.one, x(it,"entered")?"Entered "+fmtDate(x(it,"entered")):(it.createdAt&&!String(it.createdAt).startsWith("2026-01-27")?"Added "+fmtDate(String(it.createdAt).slice(0,10)):""), it.updatedAt?`Last edited ${new Date(it.updatedAt).toLocaleDateString()}${it.updatedBy?" by "+who(it.updatedBy):""}`:(it.type==="strain"?"Imported from FileMaker":"Imported from the Quartzy spreadsheet")].filter(Boolean).join(" · ");
+  const meta=isCopy?"New "+(TYPES[it.type]?.one||"item").toLowerCase()+", copied — change what's different and add it":isNew?"New item":[TYPES[it.type]?.one, x(it,"entered")?"Entered "+fmtDate(x(it,"entered")):(it.createdAt&&!String(it.createdAt).startsWith("2026-01-27")?"Added "+fmtDate(String(it.createdAt).slice(0,10)):""), it.updatedAt?`Last edited ${new Date(it.updatedAt).toLocaleDateString()}${it.updatedBy?" by "+who(it.updatedBy):""}`:(STRAINLIKE.has(it.type)?"Imported from FileMaker":"Imported from the Quartzy spreadsheet")].filter(Boolean).join(" · ");
   sheet(isCopy?"Duplicate of "+preset._copyOf:isNew?"Add item":it.name, meta, body, [del, h("span",{class:"spacer"}), dup, reorder, h("button",{class:"btn",onclick:closeSheet},"Cancel"), save].filter(Boolean));
 }
 
