@@ -381,8 +381,29 @@ function sheet(title,meta,body,foot){
   setTimeout(()=>s.querySelector("input,select,textarea")?.focus(),30);
 }
 function locList(){return h("datalist",{id:"loclist"},[...new Set([...S.items.values()].map(i=>i.location).filter(Boolean))].sort().map(l=>h("option",{value:l})))}
+/* Build a new-item template from an existing item: keeps what it shares
+   (genotype, background, supplier...) and clears what identifies the copy. */
+function duplicateTemplate(src){
+  const copy=JSON.parse(JSON.stringify(src));
+  for(const k of ["id","createdBy","createdAt","updatedBy","updatedAt","stock","lot","expiry","opened","lastOrdered","lastPurchase"]) delete copy[k];
+  copy.extra={...(copy.extra||{})};
+  copy._copyOf=src.name||"item";
+  const num=k=>Math.max(0,...[...S.items.values()].filter(i=>i.type===src.type).map(i=>parseInt(x(i,k))||0))+1;
+  if(src.type==="strain"||src.type==="plasmid"||src.type==="oligo"){
+    const key=src.type==="oligo"?"oligoNo":src.type+"No";
+    const next=num(key); copy.extra[key]=String(next);
+    const prefix=(/^([A-Za-z]+)\d+$/.exec(src.name||"")||[])[1];
+    copy.name=prefix?prefix+next:"";
+    for(const k of ["kelloggName","prevName","notebook","box"]) delete copy.extra[k];
+    if(copy.extra.entered!==undefined) copy.extra.entered=today();
+    copy.notes="Derived from "+(src.name||"another "+(TYPES[src.type]?.one||"item").toLowerCase())+".";
+  } else {
+    copy.name=(src.name||"")+" (copy)";
+  }
+  return copy;
+}
 function openItem(id, preset){
-  const it = id ? S.items.get(id) : {type:preset||S.type||"chemical"};
+  const it = id ? S.items.get(id) : (preset&&typeof preset==="object" ? preset : {type:preset||S.type||"chemical"});
   if(!it) return;
   const isNew=!id;
   const typeSel=field("i-type","Type",it.type,{select:ORDER.map(t=>[t,TYPES[t].one])});
@@ -433,9 +454,11 @@ function openItem(id, preset){
   const del=!isNew&&h("button",{class:"btn danger",disabled:S.readonly,onclick:async()=>{
     if(!armed){armed=true;del.classList.add("armed");del.textContent="Click again to delete";setTimeout(()=>{armed=false;del.classList.remove("armed");del.textContent="Delete"},4000);return}
     try{await db.collection("items").doc(id).delete();toast("Deleted");closeSheet()}catch(e){writeFailed(e)}}},"Delete");
-  const reorder=!isNew&&h("button",{class:"btn",disabled:S.readonly,onclick:()=>openRequest(null,it)},"Request reorder");
-  const meta=isNew?"New item":[TYPES[it.type]?.one, it.updatedAt?`Last edited ${new Date(it.updatedAt).toLocaleDateString()}${it.updatedBy?" by "+who(it.updatedBy):""}`:"Imported from the Quartzy spreadsheet"].filter(Boolean).join(" · ");
-  sheet(isNew?"Add item":it.name, meta, body, [del, h("span",{class:"spacer"}), reorder, h("button",{class:"btn",onclick:closeSheet},"Cancel"), save].filter(Boolean));
+  const reorder=!isNew&&ORDERABLE.has(it.type)&&h("button",{class:"btn",disabled:S.readonly,onclick:()=>openRequest(null,it)},"Request reorder");
+  const dup=!isNew&&h("button",{class:"btn",disabled:S.readonly,title:"Start a new "+(TYPES[it.type]?.one||"item").toLowerCase()+" with this one's details",onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate");
+  const isCopy=isNew&&preset&&typeof preset==="object";
+  const meta=isCopy?"New "+(TYPES[it.type]?.one||"item").toLowerCase()+", copied — change what's different and add it":isNew?"New item":[TYPES[it.type]?.one, it.updatedAt?`Last edited ${new Date(it.updatedAt).toLocaleDateString()}${it.updatedBy?" by "+who(it.updatedBy):""}`:"Imported from the Quartzy spreadsheet"].filter(Boolean).join(" · ");
+  sheet(isCopy?"Duplicate of "+preset._copyOf:isNew?"Add item":it.name, meta, body, [del, h("span",{class:"spacer"}), dup, reorder, h("button",{class:"btn",onclick:closeSheet},"Cancel"), save].filter(Boolean));
 }
 
 /* ---------- orders ---------- */
