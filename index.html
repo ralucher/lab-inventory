@@ -265,7 +265,8 @@ function filtered(){
   });
   const s=S.sort;
   if(s){arr.sort((a,b)=>{const va=s.get(a),vb=s.get(b);if(va===vb)return 0;if(va===""||va==null)return 1;if(vb===""||vb==null)return -1;return (va<vb?-1:1)*s.dir})}
-  else arr.sort((a,b)=> a.type===b.type && a.type==="oligo" ? (+x(a,"oligoNo")||1e9)-(+x(b,"oligoNo")||1e9) : ORDER.indexOf(a.type)-ORDER.indexOf(b.type) || (a.name||"").localeCompare(b.name||""));
+  else if(S.type==="strain") arr.sort((a,b)=> (+x(b,"strainNo")||0)-(+x(a,"strainNo")||0) || String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  else arr.sort((a,b)=> a.type===b.type && a.type==="oligo" ?(+x(a,"oligoNo")||1e9)-(+x(b,"oligoNo")||1e9) : ORDER.indexOf(a.type)-ORDER.indexOf(b.type) || (a.name||"").localeCompare(b.name||""));
   return arr;
 }
 function columns(){
