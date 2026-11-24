@@ -92,6 +92,8 @@ td.name .sub{display:block;font-weight:400;color:var(--muted);font-size:12px}
 .gate-card input{padding:9px 11px;border:1px solid var(--line);border-radius:6px;background:var(--bg)}
 .gate-card .btn{justify-content:center}
 .gate-or{text-align:center;color:var(--muted);font-size:12px}
+.row-acts{white-space:nowrap;text-align:right}
+.row-acts>*+*{margin-left:6px}
 .clip{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .notes{min-width:220px;max-width:420px;font-size:12.5px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
 .seq{font-family:var(--font-mono);font-size:12px;max-width:360px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
@@ -293,12 +295,12 @@ function columns(){
     {k:"bar",l:"BAR",cls:"hide-sm",get:i=>x(i,"bar"),cell:i=>h("td",{class:"hide-sm"},x(i,"bar")==="BAR+"?h("span",{class:"pill low"},"BAR+"):x(i,"bar"))},
     {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))},
     {k:"origin",l:"Origin",cls:"hide-sm",get:i=>x(i,"origin").toLowerCase(),cell:i=>h("td",{class:"hide-sm"},h("div",{class:"clip",style:"max-width:110px",title:x(i,"origin")},x(i,"origin")))},
-    {k:"notes",l:"Notes",get:i=>(i.notes||"").toLowerCase(),cell:i=>h("td",{},h("div",{class:"notes",title:i.notes||""},i.notes||""))}];
+    {k:"notes",l:"Notes",get:i=>(i.notes||"").toLowerCase(),cell:i=>h("td",{},h("div",{class:"notes",title:i.notes||""},i.notes||""))}, reorder];
   if(t==="plasmid") return [
     {k:"no",l:"#",cls:"num",get:i=>+x(i,t+"No")||1e9,cell:i=>h("td",{class:"num mono"},x(i,t+"No"))},
     {...name,cell:i=>h("td",{class:"name"},i.name,h("span",{class:"sub"},t==="plasmid"?[x(i,"backbone"),x(i,"insert")].filter(Boolean).join(" · "):x(i,"genotype")))},
     {k:"box",l:"Freezer position",get:i=>x(i,"box"),cell:i=>h("td",{class:"mono"},x(i,"box"))},
-    {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))}, loc];
+    {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))}, loc, reorder];
   if(t==="equipment") return [name,cat,loc,price,{k:"serial",l:"Serial #",cls:"hide-sm",get:i=>x(i,"serial"),cell:i=>h("td",{class:"mono hide-sm"},x(i,"serial"))},lastOrd,reorder];
   return [name, t?null:typeC, cat, loc, size, stock, price, lastOrd, status, reorder].filter(Boolean);
 }
@@ -307,11 +309,13 @@ function lastOrderedOf(i){return i.lastOrdered||i.lastPurchase||""}
 function fmtDate(d){const m=/^(\d{4})-(\d{2})-(\d{2})/.exec(d);return m?`${m[3]}/${m[2]}/${m[1]}`:d}
 function openRequestFor(itemId){for(const r of S.reqs.values()) if(r.itemId===itemId&&r.status!=="received") return r; return null}
 function reorderCell(it){
-  const td=h("td",{style:"white-space:nowrap",onclick:e=>e.stopPropagation()});
-  if(!ORDERABLE.has(it.type)) return td;
-  const open=openRequestFor(it.id);
-  if(open){td.append(h("button",{class:"pill soon",style:"border:0;cursor:pointer",title:"Open this request on the Orders board",onclick:()=>{showOrders();openRequest(open.id)}},(STATUSES.find(s=>s[0]===open.status)||["","Requested"])[1]));return td}
-  td.append(h("button",{class:"btn sm",disabled:S.readonly,"aria-label":"Reorder "+(it.name||""),onclick:()=>openRequest(null,it)},"Reorder"));
+  const td=h("td",{class:"row-acts",onclick:e=>e.stopPropagation()});
+  if(ORDERABLE.has(it.type)){
+    const open=openRequestFor(it.id);
+    if(open) td.append(h("button",{class:"pill soon",style:"border:0;cursor:pointer",title:"Open this request on the Orders board",onclick:()=>{showOrders();openRequest(open.id)}},(STATUSES.find(s=>s[0]===open.status)||["","Requested"])[1]));
+    else td.append(h("button",{class:"btn sm",disabled:S.readonly,"aria-label":"Reorder "+(it.name||""),onclick:()=>openRequest(null,it)},"Reorder"));
+  }
+  td.append(h("button",{class:"btn sm",disabled:S.readonly,title:"New "+(TYPES[it.type]?.one||"item").toLowerCase()+" copied from this one","aria-label":"Duplicate "+(it.name||""),onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate"));
   return td;
 }
 function stockCell(it){
