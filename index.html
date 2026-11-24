@@ -301,7 +301,7 @@ function columns(){
     {k:"no",l:"#",cls:"num",get:i=>+x(i,t+"No")||1e9,cell:i=>h("td",{class:"num mono"},x(i,t+"No"))},
     {...name,cell:i=>h("td",{class:"name"},i.name,h("span",{class:"sub"},t==="plasmid"?[x(i,"backbone"),x(i,"insert")].filter(Boolean).join(" · "):x(i,"genotype")))},
     {k:"box",l:"Freezer position",get:i=>x(i,"box"),cell:i=>h("td",{class:"mono"},x(i,"box"))},
-    {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))}, loc, reorder];
+    {k:"owner",l:"Made by",cls:"hide-sm",get:i=>x(i,"owner"),cell:i=>h("td",{class:"hide-sm"},x(i,"owner"))}, loc];
   if(t==="equipment") return [name,cat,loc,price,{k:"serial",l:"Serial #",cls:"hide-sm",get:i=>x(i,"serial"),cell:i=>h("td",{class:"mono hide-sm"},x(i,"serial"))},lastOrd,reorder];
   return [name, t?null:typeC, cat, loc, size, stock, price, lastOrd, status, reorder].filter(Boolean);
 }
@@ -316,7 +316,7 @@ function reorderCell(it){
     if(open) td.append(h("button",{class:"pill soon",style:"border:0;cursor:pointer",title:"Open this request on the Orders board",onclick:()=>{showOrders();openRequest(open.id)}},(STATUSES.find(s=>s[0]===open.status)||["","Requested"])[1]));
     else td.append(h("button",{class:"btn sm",disabled:S.readonly,"aria-label":"Reorder "+(it.name||""),onclick:()=>openRequest(null,it)},"Reorder"));
   }
-  td.append(h("button",{class:"btn sm",disabled:S.readonly,title:"New "+(TYPES[it.type]?.one||"item").toLowerCase()+" copied from this one","aria-label":"Duplicate "+(it.name||""),onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate"));
+  if(it.type==="strain") td.append(h("button",{class:"btn sm",disabled:S.readonly,title:"New "+(TYPES[it.type]?.one||"item").toLowerCase()+" copied from this one","aria-label":"Duplicate "+(it.name||""),onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate"));
   return td;
 }
 function stockCell(it){
@@ -460,7 +460,7 @@ function openItem(id, preset){
     if(!armed){armed=true;del.classList.add("armed");del.textContent="Click again to delete";setTimeout(()=>{armed=false;del.classList.remove("armed");del.textContent="Delete"},4000);return}
     try{await db.collection("items").doc(id).delete();toast("Deleted");closeSheet()}catch(e){writeFailed(e)}}},"Delete");
   const reorder=!isNew&&ORDERABLE.has(it.type)&&h("button",{class:"btn",disabled:S.readonly,onclick:()=>openRequest(null,it)},"Request reorder");
-  const dup=!isNew&&h("button",{class:"btn",disabled:S.readonly,title:"Start a new "+(TYPES[it.type]?.one||"item").toLowerCase()+" with this one's details",onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate");
+  const dup=!isNew&&it.type==="strain"&&h("button",{class:"btn",disabled:S.readonly,title:"Start a new "+(TYPES[it.type]?.one||"item").toLowerCase()+" with this one's details",onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate");
   const isCopy=isNew&&preset&&typeof preset==="object";
   const meta=isCopy?"New "+(TYPES[it.type]?.one||"item").toLowerCase()+", copied — change what's different and add it":isNew?"New item":[TYPES[it.type]?.one, it.updatedAt?`Last edited ${new Date(it.updatedAt).toLocaleDateString()}${it.updatedBy?" by "+who(it.updatedBy):""}`:"Imported from the Quartzy spreadsheet"].filter(Boolean).join(" · ");
   sheet(isCopy?"Duplicate of "+preset._copyOf:isNew?"Add item":it.name, meta, body, [del, h("span",{class:"spacer"}), dup, reorder, h("button",{class:"btn",onclick:closeSheet},"Cancel"), save].filter(Boolean));
