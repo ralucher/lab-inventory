@@ -217,7 +217,7 @@ const TYPES = {
   enzyme:{label:"Enzymes & kits",one:"Enzyme / kit",extra:[["activity","Activity"],["buffer","Buffer"],["incubationTemp","Incubation temp"],["storageTemp","Storage temp"]]},
   oligo:{label:"Oligos",one:"Oligo",extra:[["oligoNo","Oligo #"],["owner","Designed by"],["sequence","Sequence 5′→3′","seq"],["bindsTo","Binds to / template"],["application","Application"],["tm","Tm (°C)"]]},
   plasmid:{label:"Plasmids",one:"Plasmid",extra:[["plasmidNo","Plasmid #"],["backbone","Backbone"],["insert","Insert"],["resistance","Bacterial resistance"],["marker","Yeast marker"],["box","Freezer box / position"],["owner","Made by"]]},
-  strain:{label:"Strains",one:"Strain",extra:[["strainNo","Number"],["owner","Your name"],["genotype","Chromosomal genotype","seqtext"],["background","Strain background"],["mating","Mating type"],["bar","BAR status (BAR+ / BAR−)"],["origin","Lab of origin"],["prevName","Previous / other-lab name"],["kelloggName","Kellogg lab strain name"],["notebook","Notebook reference"],["entered","Date entered"],["repPlasmid","Replicating plasmid"],["intPlasmid","Integrated plasmid"],["plasmidMarker","Plasmid marker"],["box","Freezer box / position"],["reference","Reference for construction of strain",1]]},
+  strain:{label:"Strains",one:"Strain",extra:[["strainNo","Number"],["owner","Your name"],["genotype","Chromosomal genotype","seqtext"],["background","Strain background"],["mating","Mating type"],["bar","BAR status (BAR+ / BAR−)"],["origin","Lab of origin"],["prevName","Previous / other-lab name"],["kelloggName","Kellogg lab strain name"],["notebook","Notebook reference"],["entered","Date entered","date"],["repPlasmid","Replicating plasmid"],["intPlasmid","Integrated plasmid"],["plasmidMarker","Plasmid marker"],["box","Freezer box / position"],["reference","Reference for construction of strain",1]]},
   supply:{label:"Supplies",one:"Supply",extra:[]},
   equipment:{label:"Equipment",one:"Equipment",extra:[["serial","Serial #"],["contact","Service contact"],["maintenance","Maintenance notes",1]]},
 };
@@ -239,7 +239,7 @@ function h(tag, attrs, ...kids){
   return el;
 }
 function toast(msg){const t=h("div",{class:"toast",role:"status"},msg);$("#toast-root").replaceChildren(t);setTimeout(()=>t.remove(),2600)}
-function today(){return new Date().toISOString().slice(0,10)}
+function today(){const d=new Date();return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
 function daysTo(d){if(!d)return null;const t=Date.parse(d);return isNaN(t)?null:Math.round((t-Date.now())/864e5)}
 function cleanSeq(s){return (s||"").replace(/[^ACGTUNacgtun]/g,"").toUpperCase()}
 function isLow(it){return typeof it.stock==="number" && ((typeof it.minStock==="number" && it.stock<=it.minStock) || it.stock<=0)}
@@ -400,7 +400,7 @@ function duplicateTemplate(src){
     const prefix=(/^([A-Za-z]+)\d+$/.exec(src.name||"")||[])[1];
     copy.name=prefix?prefix+next:"";
     for(const k of ["kelloggName","prevName","notebook","box"]) delete copy.extra[k];
-    if(copy.extra.entered!==undefined) copy.extra.entered=today();
+    copy.extra.entered=today();
     copy.notes="Derived from "+(src.name||"another "+(TYPES[src.type]?.one||"item").toLowerCase())+".";
   } else {
     copy.name=(src.name||"")+" (copy)";
@@ -418,7 +418,7 @@ function openItem(id, preset){
     const defs=TYPES[type].extra;
     extraBox.replaceChildren(h("legend",{},TYPES[type].one+" details"));
     extraBox.hidden=!defs.length;
-    for(const [k,l,kind] of defs) extraBox.append(field("x-"+k,l,x(it,k),{wide:!!kind,area:!!kind,mono:kind==="seq"||kind==="seqtext"}));
+    for(const [k,l,kind] of defs){const isDate=kind==="date";const val=x(it,k)||(isDate&&isNew?today():"");extraBox.append(field("x-"+k,l,val,{wide:!!kind&&!isDate,area:!!kind&&!isDate,type:isDate?"date":undefined,mono:kind==="seq"||kind==="seqtext"}))}
     if(type==="oligo"){extraBox.append(seqInfo);const ta=extraBox.querySelector("#x-sequence");const upd=()=>{const s=cleanSeq(ta.value);const gc=s?Math.round(100*(s.match(/[GC]/g)||[]).length/s.length):0;seqInfo.textContent=s?`${s.length} nt · GC ${gc}%`:""};ta.addEventListener("input",upd);upd()}
   }
   const body=[
@@ -446,6 +446,7 @@ function openItem(id, preset){
     const name=v("i-name"); if(!name){document.getElementById("i-name").focus();toast("Give the item a name.");return}
     const type=v("i-type"); const extra={};
     for(const [k] of TYPES[type].extra){const s=v("x-"+k);if(s)extra[k]=s}
+    if(type==="strain"&&!extra.entered) extra.entered=today();
     const url=v("i-url");
     const doc={type,name,catalog:v("i-catalog"),brand:v("i-brand"),supplier:v("i-supplier"),url:url.startsWith("https://")?url:"",location:v("i-location"),size:v("i-size"),
       stock:n("i-stock"),stockUnit:v("i-stockUnit"),minStock:n("i-minStock"),expiry:v("i-expiry"),lot:v("i-lot"),opened:v("i-opened"),price:n("i-price"),lastPurchase:v("i-lastPurchase"),notes:v("i-notes"),extra,
@@ -462,7 +463,7 @@ function openItem(id, preset){
   const reorder=!isNew&&ORDERABLE.has(it.type)&&h("button",{class:"btn",disabled:S.readonly,onclick:()=>openRequest(null,it)},"Request reorder");
   const dup=!isNew&&it.type==="strain"&&h("button",{class:"btn",disabled:S.readonly,title:"Start a new "+(TYPES[it.type]?.one||"item").toLowerCase()+" with this one's details",onclick:()=>openItem(null,duplicateTemplate(it))},"Duplicate");
   const isCopy=isNew&&preset&&typeof preset==="object";
-  const meta=isCopy?"New "+(TYPES[it.type]?.one||"item").toLowerCase()+", copied — change what's different and add it":isNew?"New item":[TYPES[it.type]?.one, it.updatedAt?`Last edited ${new Date(it.updatedAt).toLocaleDateString()}${it.updatedBy?" by "+who(it.updatedBy):""}`:"Imported from the Quartzy spreadsheet"].filter(Boolean).join(" · ");
+  const meta=isCopy?"New "+(TYPES[it.type]?.one||"item").toLowerCase()+", copied — change what's different and add it":isNew?"New item":[TYPES[it.type]?.one, x(it,"entered")?"Entered "+fmtDate(x(it,"entered")):(it.createdAt&&!String(it.createdAt).startsWith("2026-01-27")?"Added "+fmtDate(String(it.createdAt).slice(0,10)):""), it.updatedAt?`Last edited ${new Date(it.updatedAt).toLocaleDateString()}${it.updatedBy?" by "+who(it.updatedBy):""}`:(it.type==="strain"?"Imported from FileMaker":"Imported from the Quartzy spreadsheet")].filter(Boolean).join(" · ");
   sheet(isCopy?"Duplicate of "+preset._copyOf:isNew?"Add item":it.name, meta, body, [del, h("span",{class:"spacer"}), dup, reorder, h("button",{class:"btn",onclick:closeSheet},"Cancel"), save].filter(Boolean));
 }
 
