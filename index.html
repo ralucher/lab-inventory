@@ -267,7 +267,7 @@ function filtered(){
   });
   const s=S.sort;
   if(s){arr.sort((a,b)=>{const va=s.get(a),vb=s.get(b);if(va===vb)return 0;if(va===""||va==null)return 1;if(vb===""||vb==null)return -1;return (va<vb?-1:1)*s.dir})}
-  else if(STRAINLIKE.has(S.type)) arr.sort((a,b)=> (+x(b,"strainNo")||0)-(+x(a,"strainNo")||0) || String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
+  else if(STRAINLIKE.has(S.type)) arr.sort((a,b)=> (+x(b,"strainNo")||0)-(+x(a,"strainNo")||0) || String(b.name||"").localeCompare(String(a.name||""),undefined,{numeric:true}) || String(b.createdAt||"").localeCompare(String(a.createdAt||"")));
   else arr.sort((a,b)=> a.type===b.type && a.type==="oligo" ?(+x(a,"oligoNo")||1e9)-(+x(b,"oligoNo")||1e9) : ORDER.indexOf(a.type)-ORDER.indexOf(b.type) || (a.name||"").localeCompare(b.name||""));
   return arr;
 }
@@ -399,8 +399,15 @@ function duplicateTemplate(src){
   if(STRAINLIKE.has(src.type)||src.type==="plasmid"||src.type==="oligo"){
     const key=src.type==="oligo"?"oligoNo":STRAINLIKE.has(src.type)?"strainNo":src.type+"No";
     const next=num(key); copy.extra[key]=String(next);
+    // Name: same letters as the original, next number in THAT series (B14 -> B15, AL699 -> AL700),
+    // checked across strains and bacteria so a name is never reused.
     const prefix=(/^([A-Za-z]+)\d+$/.exec(src.name||"")||[])[1];
-    copy.name=prefix?prefix+next:"";
+    if(prefix){
+      const re=new RegExp("^"+prefix+"(\\d+)$","i");
+      const pool=[...S.items.values()].filter(i=>STRAINLIKE.has(src.type)?STRAINLIKE.has(i.type):i.type===src.type);
+      const top=Math.max(0,...pool.map(i=>{const m=re.exec(i.name||"");return m?parseInt(m[1]):0}));
+      copy.name=prefix+(top+1);
+    } else copy.name="";
     for(const k of ["kelloggName","prevName","notebook","box"]) delete copy.extra[k];
     copy.extra.entered=today();
     copy.notes="Derived from "+(src.name||"another "+(TYPES[src.type]?.one||"item").toLowerCase())+".";
